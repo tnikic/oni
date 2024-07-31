@@ -1,22 +1,30 @@
 package server
 
 import (
-	"log"
-	"net/http"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/tnikic/oni/controller"
 	"github.com/tnikic/oni/storage"
+	"github.com/tnikic/oni/tools"
 )
 
 var ctr *controller.Controller
+var e *echo.Echo
 
 func Start(storage storage.Provider) {
-	controller.InitDatabase(storage)
+	config := tools.LoadConfig()
+	controller.Startup(storage)
 
 	ctr = controller.InitController(storage)
 
-	mux := http.NewServeMux()
+	e = echo.New()
+	e.Use(middleware.Recover())
 
-	log.Println("Starting server on :80")
-	log.Fatal(http.ListenAndServe(":80", mux))
+	// Different API routes
+	PlatformAPI()
+	MangaAPI()
+	MetaAPI()
+
+	e.Logger.Fatal(e.Start(config.Host + ":" + config.Port))
 }

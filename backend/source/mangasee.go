@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
 
 	"github.com/tnikic/oni/model"
 	"github.com/tnikic/oni/tools"
@@ -26,7 +27,9 @@ func InitMangasee() *Mangasee {
 }
 
 func (m *Mangasee) GetList() []*model.MangaEntry {
-	browser := rod.New().MustConnect()
+	path, _ := launcher.LookPath()
+	url := launcher.New().Bin(path).Headless(true).MustLaunch()
+	browser := rod.New().ControlURL(url).MustConnect()
 	defer browser.MustClose()
 
 	page := browser.MustPage(m.listUrl).MustWaitStable()

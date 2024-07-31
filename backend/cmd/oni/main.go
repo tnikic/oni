@@ -7,8 +7,19 @@ import (
 
 func main() {
 	// Initialize Storage
-	storage := storage.InitSQLite()
+	var s storage.Provider
+	postgres := storage.InitPostgreSQL()
+	if postgres != nil {
+		s = postgres
+	} else {
+		sqlite := storage.InitSQLite()
+		if sqlite != nil {
+			s = sqlite
+		} else {
+			panic("No storage provider available")
+		}
+	}
 
 	// Start backend server
-	server.Start(storage)
+	server.Start(s)
 }

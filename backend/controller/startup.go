@@ -5,7 +5,7 @@ import (
 	"github.com/tnikic/oni/storage"
 )
 
-func InitDatabase(storage storage.Provider) {
+func Startup(storage storage.Provider) {
 	// Setup platform Providers
 	setupPlatform(storage, "mangasee", "Mangasee")
 }

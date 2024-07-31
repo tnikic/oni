@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"log/slog"
 	"slices"
 
 	"github.com/tnikic/oni/model"
@@ -79,6 +80,8 @@ func (pc *PlatformController) UpdateAll() {
 	for _, platform := range activePlatforms {
 		pc.Update(platform.ID)
 	}
+
+	slog.Info("All sources updated")
 }
 
 func (pc *PlatformController) ListSources(manga *model.Manga) []*model.MangaEntry {

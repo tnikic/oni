@@ -1,37 +1,39 @@
 package tools
 
 import (
-	"strings"
+	"context"
+	"log"
 
-	"github.com/knadh/koanf/providers/env"
-	"github.com/knadh/koanf/v2"
+	"github.com/sethvargo/go-envconfig"
 )
 
 type Config struct {
-	Host string
-	Port string
+	Host string `env:"ONI_HOST, default=localhost"`
+	Port string `env:"ONI_PORT, default=8080"`
 
 	DB struct {
-		Path string
+		Postgres struct {
+			Database string `env:"ONI_DB_PG_DATABASE, default=oni"`
+			Host     string `env:"ONI_DB_PG_HOST, default=postgres"`
+			User     string `env:"ONI_DB_PG_USER, default=oni"`
+			Password string `env:"ONI_DB_PG_PASSWORD, default=admin"`
+		}
+		SQLite struct {
+			Path string `env:"ONI_DB_LITE_PATH, default=./oni.db"`
+		}
 	}
 
 	Manga struct {
-		Path string
+		Path string `env:"ONI_MANGA_PATH, default=./manga"`
 	}
 }
 
 func LoadConfig() *Config {
-	k := koanf.New(".")
+	ctx := context.Background()
+	var config Config
 
-	// Load config from environment variables
-	k.Load(env.Provider("ONI_", ".", func(s string) string {
-		return strings.Replace(strings.ToLower(
-			strings.TrimPrefix(s, "ONI_")), "_", ".", -1)
-	}), nil)
-
-	// Unmarshal the config into a struct
-	var config *Config
-	k.Unmarshal("", config)
-
-	return config
+	if err := envconfig.Process(ctx, &config); err != nil {
+		log.Fatal(err)
+	}
+	return &config
 }

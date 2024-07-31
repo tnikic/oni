@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -12,26 +13,27 @@ import (
 )
 
 type SQLite struct {
-	path string
-	db   *sql.DB
+	db     *sql.DB
+	config *tools.Config
 }
 
 func InitSQLite() *SQLite {
 	config := tools.LoadConfig()
 
-	sqlite := &SQLite{
-		path: config.DB.Path,
-	}
-
-	db, err := sql.Open("sqlite3", sqlite.path)
+	db, err := sql.Open("sqlite3", config.DB.SQLite.Path)
 	if err != nil {
 		slog.Error("Error opening SQLite database")
-		panic(err)
+		return nil
 	}
 
-	sqlite.db = db
+	s := &SQLite{
+		db:     db,
+		config: config,
+	}
 
-	return sqlite
+	s.createTables()
+
+	return s
 }
 
 // --------------------
@@ -57,7 +59,7 @@ func (s *SQLite) StoreManga(manga *model.Manga) {
 		manga.Path,
 	).Scan(&id)
 	if err != nil {
-		slog.Error("Error storing manga in PostgreSQL")
+		slog.Error("Error storing manga in SQLite")
 	}
 
 	manga.ID = id
@@ -85,7 +87,7 @@ func (s *SQLite) GetManga(mangaID int) *model.Manga {
 		&manga.Path,
 	)
 	if err != nil {
-		slog.Error("Error fetching manga from PostgreSQL")
+		slog.Error("Error fetching manga from SQLite")
 	}
 
 	manga.AllTitles = strings.Split(allTitles, ",")
@@ -102,7 +104,7 @@ func (s *SQLite) DeleteManga(mangaID int) {
 
 	_, err := s.db.Exec(sqlStatement, mangaID)
 	if err != nil {
-		slog.Error("Error deleting manga from PostgreSQL")
+		slog.Error("Error deleting manga from SQLite")
 	}
 }
 
@@ -114,7 +116,7 @@ func (s *SQLite) GetAllManga() []*model.Manga {
 
 	rows, err := s.db.Query(sqlStatement)
 	if err != nil {
-		slog.Error("Error fetching all manga from PostgreSQL")
+		slog.Error("Error fetching all manga from SQLite")
 		return nil
 	}
 	defer rows.Close()
@@ -136,7 +138,7 @@ func (s *SQLite) GetAllManga() []*model.Manga {
 			&manga.Path,
 		)
 		if err != nil {
-			slog.Error("Error scanning manga from PostgreSQL")
+			slog.Error("Error scanning manga from SQLite")
 			return nil
 		}
 
@@ -167,7 +169,7 @@ func (s *SQLite) StoreChapter(chapter *model.Chapter) {
 		chapter.Number,
 	).Scan(&id)
 	if err != nil {
-		slog.Error("Error storing chapter in PostgreSQL")
+		slog.Error("Error storing chapter in sqlite")
 	}
 
 	chapter.ID = id
@@ -189,7 +191,7 @@ func (s *SQLite) GetChapter(chapterID int) *model.Chapter {
 		&chapter.Number,
 	)
 	if err != nil {
-		slog.Error("Error fetching chapter from PostgreSQL")
+		slog.Error("Error fetching chapter from sqlite")
 		return nil
 	}
 
@@ -205,7 +207,7 @@ func (s *SQLite) DeleteChapter(chapterID int) {
 
 	_, err := s.db.Exec(sqlStatement, chapterID)
 	if err != nil {
-		slog.Error("Error deleting chapter from PostgreSQL")
+		slog.Error("Error deleting chapter from sqlite")
 	}
 }
 
@@ -218,7 +220,7 @@ func (s *SQLite) GetMangaChapters(mangaID int) []*model.Chapter {
 
 	rows, err := s.db.Query(sqlStatement, mangaID)
 	if err != nil {
-		slog.Error("Error fetching chapters from PostgreSQL")
+		slog.Error("Error fetching chapters from sqlite")
 		return nil
 	}
 	defer rows.Close()
@@ -232,7 +234,7 @@ func (s *SQLite) GetMangaChapters(mangaID int) []*model.Chapter {
 			&chapter.Number,
 		)
 		if err != nil {
-			slog.Error("Error scanning chapter from PostgreSQL")
+			slog.Error("Error scanning chapter from sqlite")
 			return nil
 		}
 
@@ -249,23 +251,20 @@ func (s *SQLite) GetMangaChapters(mangaID int) []*model.Chapter {
 
 func (s *SQLite) StorePlatform(platform *model.Platform) {
 	sqlStatement := `
-        INSERT INTO platform (name, active, ranking)
-        VALUES ($1, $2, $3)
-        RETURNING id
+        INSERT INTO platform (id, name, active, ranking)
+        VALUES ($1, $2, $3, $4)
     `
-	var id string
 
-	err := s.db.QueryRow(
+	_, err := s.db.Exec(
 		sqlStatement,
+		platform.ID,
 		platform.Name,
 		platform.Active,
 		platform.Ranking,
-	).Scan(&id)
+	)
 	if err != nil {
-		slog.Error("Error storing platform in PostgreSQL")
+		slog.Error("Error storing platform in sqlite")
 	}
-
-	platform.ID = id
 }
 
 func (s *SQLite) GetPlatform(platformID string) *model.Platform {
@@ -284,7 +283,7 @@ func (s *SQLite) GetPlatform(platformID string) *model.Platform {
 		&platform.Ranking,
 	)
 	if err != nil {
-		slog.Error("Error fetching platform from PostgreSQL")
+		slog.Error("Error fetching platform from sqlite")
 		return nil
 	}
 
@@ -300,7 +299,7 @@ func (s *SQLite) DeletePlatform(platformID string) {
 
 	_, err := s.db.Exec(sqlStatement, platformID)
 	if err != nil {
-		slog.Error("Error deleting platform from PostgreSQL")
+		slog.Error("Error deleting platform from sqlite")
 	}
 }
 
@@ -312,7 +311,7 @@ func (s *SQLite) GetAllPlatforms() []*model.Platform {
 
 	rows, err := s.db.Query(sqlStatement)
 	if err != nil {
-		slog.Error("Error fetching all platforms from PostgreSQL")
+		slog.Error("Error fetching all platforms from sqlite")
 		return nil
 	}
 	defer rows.Close()
@@ -327,7 +326,7 @@ func (s *SQLite) GetAllPlatforms() []*model.Platform {
 			&platform.Ranking,
 		)
 		if err != nil {
-			slog.Error("Error scanning platform from PostgreSQL")
+			slog.Error("Error scanning platform from sqlite")
 			return nil
 		}
 
@@ -347,7 +346,7 @@ func (s *SQLite) StoreMangaEntry(mangaEntry *model.MangaEntry) {
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
     `
-	id := 0
+	var id int
 
 	err := s.db.QueryRow(
 		sqlStatement,
@@ -359,7 +358,8 @@ func (s *SQLite) StoreMangaEntry(mangaEntry *model.MangaEntry) {
 		mangaEntry.Ranking,
 	).Scan(&id)
 	if err != nil {
-		slog.Error("Error storing manga entry in PostgreSQL")
+		slog.Error("Error storing manga entry in sqlite")
+		fmt.Println(err)
 	}
 
 	mangaEntry.ID = id
@@ -384,7 +384,7 @@ func (s *SQLite) GetMangaEntry(mangaEntryID int) *model.MangaEntry {
 		&mangaEntry.Ranking,
 	)
 	if err != nil {
-		slog.Error("Error fetching manga entry from PostgreSQL")
+		slog.Error("Error fetching manga entry from sqlite")
 		return nil
 	}
 
@@ -400,7 +400,7 @@ func (s *SQLite) DeleteMangaEntry(mangaEntryID int) {
 
 	_, err := s.db.Exec(sqlStatement, mangaEntryID)
 	if err != nil {
-		slog.Error("Error deleting manga entry from PostgreSQL")
+		slog.Error("Error deleting manga entry from sqlite")
 	}
 }
 
@@ -413,7 +413,7 @@ func (s *SQLite) GetMangaEntries(mangaID int) []*model.MangaEntry {
 
 	rows, err := s.db.Query(sqlStatement, mangaID)
 	if err != nil {
-		slog.Error("Error fetching manga entries from PostgreSQL")
+		slog.Error("Error fetching manga entries from sqlite")
 	}
 	defer rows.Close()
 
@@ -430,7 +430,7 @@ func (s *SQLite) GetMangaEntries(mangaID int) []*model.MangaEntry {
 			&entry.Ranking,
 		)
 		if err != nil {
-			slog.Error("Error scanning manga entry from PostgreSQL")
+			slog.Error("Error scanning manga entry from sqlite")
 			return nil
 		}
 
@@ -450,7 +450,7 @@ func (s *SQLite) GetPlatformEntries(platformID string) []*model.MangaEntry {
 
 	rows, err := s.db.Query(sqlStatement, platformID)
 	if err != nil {
-		slog.Error("Error fetching manga entries from PostgreSQL")
+		slog.Error("Error fetching manga entries from sqlite")
 		return nil
 	}
 	defer rows.Close()
@@ -467,7 +467,7 @@ func (s *SQLite) GetPlatformEntries(platformID string) []*model.MangaEntry {
 			&entry.Ranking,
 		)
 		if err != nil {
-			slog.Error("Error scanning manga entry from PostgreSQL")
+			slog.Error("Error scanning manga entry from sqlite")
 			return nil
 		}
 
@@ -486,7 +486,7 @@ func (s *SQLite) GetAllMangaEntries() []*model.MangaEntry {
 
 	rows, err := s.db.Query(sqlStatement)
 	if err != nil {
-		slog.Error("Error fetching all manga entries from PostgreSQL")
+		slog.Error("Error fetching all manga entries from sqlite")
 		return nil
 	}
 	defer rows.Close()
@@ -504,7 +504,7 @@ func (s *SQLite) GetAllMangaEntries() []*model.MangaEntry {
 			&entry.Ranking,
 		)
 		if err != nil {
-			slog.Error("Error scanning manga entry from PostgreSQL")
+			slog.Error("Error scanning manga entry from sqlite")
 			return nil
 		}
 
@@ -535,7 +535,7 @@ func (s *SQLite) StoreChapterEntry(chapterEntry *model.ChapterEntry) {
 		chapterEntry.ChapterUrl,
 	).Scan(&id)
 	if err != nil {
-		slog.Error("Error storing chapter entry in PostgreSQL")
+		slog.Error("Error storing chapter entry in sqlite")
 	}
 
 	chapterEntry.ID = id
@@ -559,7 +559,7 @@ func (s *SQLite) GetChapterEntry(chapterEntryID int) *model.ChapterEntry {
 		&chapterEntry.ChapterUrl,
 	)
 	if err != nil {
-		slog.Error("Error fetching chapter entry from PostgreSQL")
+		slog.Error("Error fetching chapter entry from sqlite")
 		return nil
 	}
 
@@ -575,7 +575,7 @@ func (s *SQLite) DeleteChapterEntry(chapterEntryID int) {
 
 	_, err := s.db.Exec(sqlStatement, chapterEntryID)
 	if err != nil {
-		slog.Error("Error deleting chapter entry from PostgreSQL")
+		slog.Error("Error deleting chapter entry from sqlite")
 	}
 }
 
@@ -598,7 +598,7 @@ func (s *SQLite) GetChapterEntryForChapter(mangaEntryID int, chapterNumber int) 
 		&chapterEntry.ChapterUrl,
 	)
 	if err != nil {
-		slog.Error("Error fetching chapter entry for chapter from PostgreSQL")
+		slog.Error("Error fetching chapter entry for chapter from sqlite")
 		return nil
 	}
 
@@ -614,7 +614,7 @@ func (s *SQLite) GetChapterEntries(mangaEntryID int) []*model.ChapterEntry {
 
 	rows, err := s.db.Query(sqlStatement, mangaEntryID)
 	if err != nil {
-		slog.Error("Error fetching chapter entries from PostgreSQL")
+		slog.Error("Error fetching chapter entries from sqlite")
 		return nil
 	}
 	defer rows.Close()
@@ -631,7 +631,7 @@ func (s *SQLite) GetChapterEntries(mangaEntryID int) []*model.ChapterEntry {
 			&entry.ChapterUrl,
 		)
 		if err != nil {
-			slog.Error("Error scanning chapter entry from PostgreSQL")
+			slog.Error("Error scanning chapter entry from sqlite")
 			return nil
 		}
 
@@ -648,7 +648,7 @@ func (s *SQLite) GetChapterEntries(mangaEntryID int) []*model.ChapterEntry {
 func (s *SQLite) createTables() {
 	_, err := s.db.Exec(`
         CREATE TABLE IF NOT EXISTS manga (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
             title TEXT,
             all_titles TEXT,
             author TEXT,
@@ -657,8 +657,7 @@ func (s *SQLite) createTables() {
             country TEXT,
             description TEXT,
             path TEXT
-        );
-    `)
+        );`)
 	if err != nil {
 		slog.Error("Error creating manga table")
 		panic(err)
@@ -666,12 +665,11 @@ func (s *SQLite) createTables() {
 
 	_, err = s.db.Exec(`
         CREATE TABLE IF NOT EXISTS chapter (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
             manga_id INT,
             chapter_entry_id INT,
-            number INT,
-        );
-    `)
+            number INT
+        );`)
 	if err != nil {
 		slog.Error("Error creating chapter table")
 		panic(err)
@@ -679,7 +677,7 @@ func (s *SQLite) createTables() {
 
 	_, err = s.db.Exec(`
         CREATE TABLE IF NOT EXISTS platform (
-            id TEXT PRIMARY KEY,
+            id TEXT PRIMARY KEY NOT NULL,
             name TEXT,
             ranking INT,
             active BOOLEAN
@@ -692,13 +690,13 @@ func (s *SQLite) createTables() {
 
 	_, err = s.db.Exec(`
         CREATE TABLE IF NOT EXISTS manga_entry (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
             manga_id INT,
-            platform_id INT,
+            platform_id TEXT,
             name TEXT,
             manga_url TEXT,
-            chapter_count INT
-            ranking INT,
+            chapter_count INT,
+            ranking INT
         );
     `)
 	if err != nil {
@@ -708,7 +706,7 @@ func (s *SQLite) createTables() {
 
 	_, err = s.db.Exec(`
         CREATE TABLE IF NOT EXISTS chapter_entry (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
             chapter_id INT,
             manga_entry_id INT,
             manga_id INT,
